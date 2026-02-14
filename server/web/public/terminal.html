@@ -38,20 +38,45 @@
       height: calc(100% - 36px);
       width: 100%;
     }
-    /* Mobile keyboard bar */
+    /* Mobile keyboard bar - draggable */
     #mobile-keys {
       display: none;
-      height: 44px;
-      background: #161b22;
-      border-top: 1px solid #30363d;
-      padding: 4px 8px;
+      position: fixed;
+      left: 8px;
+      right: 8px;
+      bottom: 20px;
+      height: 48px;
+      background: rgba(22, 27, 34, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 6px 8px;
       gap: 6px;
       align-items: center;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      z-index: 1000;
+      touch-action: none;
     }
     #mobile-keys.visible {
       display: flex;
+    }
+    #mobile-keys .drag-handle {
+      flex-shrink: 0;
+      width: 32px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      color: #484f58;
+      font-size: 18px;
+      touch-action: none;
+    }
+    #mobile-keys .drag-handle:active {
+      cursor: grabbing;
     }
     #mobile-keys button {
       flex-shrink: 0;
@@ -107,6 +132,7 @@
 
   <!-- Mobile special keys bar -->
   <div id="mobile-keys">
+    <div class="drag-handle">⋮⋮</div>
     <button data-key="Tab">Tab</button>
     <button data-key="Escape">Esc</button>
     <div class="separator"></div>
@@ -300,13 +326,66 @@
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
                      (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
     const mobileKeys = document.getElementById('mobile-keys');
-    const termContainer = document.getElementById('terminal-container');
 
     if (isMobile) {
       mobileKeys.classList.add('visible');
-      // Adjust terminal height to account for mobile keys bar
-      const topBarHeight = wantFullscreen ? 0 : 36;
-      termContainer.style.height = `calc(100% - ${topBarHeight}px - 44px)`;
+
+      // Restore saved position
+      const savedPos = localStorage.getItem('lt-keys-pos');
+      if (savedPos) {
+        const { x, y } = JSON.parse(savedPos);
+        mobileKeys.style.left = x + 'px';
+        mobileKeys.style.right = 'auto';
+        mobileKeys.style.bottom = 'auto';
+        mobileKeys.style.top = y + 'px';
+      }
+
+      // Drag functionality
+      const dragHandle = mobileKeys.querySelector('.drag-handle');
+      let isDragging = false;
+      let startX, startY, startLeft, startTop;
+
+      dragHandle.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        const touch = e.touches[0];
+        const rect = mobileKeys.getBoundingClientRect();
+        startX = touch.clientX;
+        startY = touch.clientY;
+        startLeft = rect.left;
+        startTop = rect.top;
+        mobileKeys.style.transition = 'none';
+        e.preventDefault();
+      }, { passive: false });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+
+        let newLeft = startLeft + dx;
+        let newTop = startTop + dy;
+
+        // Keep within bounds
+        const maxX = window.innerWidth - mobileKeys.offsetWidth;
+        const maxY = window.innerHeight - mobileKeys.offsetHeight;
+        newLeft = Math.max(0, Math.min(newLeft, maxX));
+        newTop = Math.max(0, Math.min(newTop, maxY));
+
+        mobileKeys.style.left = newLeft + 'px';
+        mobileKeys.style.right = 'auto';
+        mobileKeys.style.bottom = 'auto';
+        mobileKeys.style.top = newTop + 'px';
+      }, { passive: true });
+
+      document.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        mobileKeys.style.transition = '';
+        // Save position
+        const rect = mobileKeys.getBoundingClientRect();
+        localStorage.setItem('lt-keys-pos', JSON.stringify({ x: rect.left, y: rect.top }));
+      });
     }
 
     // Key mappings
