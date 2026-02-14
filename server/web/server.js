@@ -269,15 +269,14 @@ if ! pgrep -f "frpc.*frpc.toml" &>/dev/null; then
     echo "[LiveTerminal] Starting tunnel..."
     nohup frpc -c "\${DIR}/frpc.toml" > "\${DIR}/frpc.log" 2>&1 &
     sleep 2
-    pgrep -f "frpc.*frpc.toml" &>/dev/null && echo "[✓] Tunnel active." || { echo "[!] Tunnel failed"; exit 1; }
+    if pgrep -f "frpc.*frpc.toml" &>/dev/null; then
+        echo "[✓] Tunnel active. Access your terminal from the web."
+    else
+        echo "[✗] Tunnel failed. Check \${DIR}/frpc.log"
+        exit 1
+    fi
 else
     echo "[✓] Tunnel already running."
-fi
-SESSION="liveterminal"
-if zellij list-sessions 2>/dev/null | grep -q "\$SESSION"; then
-    zellij attach "\$SESSION"
-else
-    zellij --session "\$SESSION"
 fi
 LAUNCH
 chmod +x "\${CONFIG_DIR}/start.sh"
