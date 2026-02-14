@@ -45,38 +45,67 @@
       left: 8px;
       right: 8px;
       bottom: 20px;
-      height: 48px;
       background: rgba(22, 27, 34, 0.95);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid #30363d;
       border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      z-index: 1000;
+      transition: width 0.2s, height 0.2s;
+    }
+    #mobile-keys.visible {
+      display: block;
+    }
+    #mobile-keys .bar-header {
+      display: flex;
+      align-items: center;
+      height: 40px;
+      padding: 0 8px;
+      border-bottom: 1px solid #30363d;
+      touch-action: none;
+    }
+    #mobile-keys .drag-handle {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      cursor: grab;
+      color: #484f58;
+      font-size: 14px;
+      touch-action: none;
+    }
+    #mobile-keys .drag-handle:active {
+      cursor: grabbing;
+    }
+    #mobile-keys .btn-minimize {
+      width: 32px;
+      height: 32px;
+      background: none;
+      border: none;
+      color: #8b949e;
+      font-size: 18px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    #mobile-keys .btn-minimize:active {
+      background: #30363d;
+    }
+    #mobile-keys .keys-scroll {
+      display: flex;
       padding: 6px 8px;
       gap: 6px;
       align-items: center;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-      z-index: 1000;
-      touch-action: none;
+      touch-action: pan-x;
     }
-    #mobile-keys.visible {
-      display: flex;
+    #mobile-keys.minimized .keys-scroll {
+      display: none;
     }
-    #mobile-keys .drag-handle {
-      flex-shrink: 0;
-      width: 32px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: grab;
-      color: #484f58;
-      font-size: 18px;
-      touch-action: none;
-    }
-    #mobile-keys .drag-handle:active {
-      cursor: grabbing;
+    #mobile-keys.minimized {
+      width: auto !important;
+      right: auto !important;
     }
     #mobile-keys button {
       flex-shrink: 0;
@@ -132,24 +161,29 @@
 
   <!-- Mobile special keys bar -->
   <div id="mobile-keys">
-    <div class="drag-handle">⋮⋮</div>
-    <button data-key="Tab">Tab</button>
-    <button data-key="Escape">Esc</button>
-    <div class="separator"></div>
-    <button class="modifier" data-modifier="ctrl">Ctrl</button>
-    <button data-key="c" data-with-ctrl>C</button>
-    <button data-key="d" data-with-ctrl>D</button>
-    <button data-key="z" data-with-ctrl>Z</button>
-    <div class="separator"></div>
-    <button data-key="ArrowUp">↑</button>
-    <button data-key="ArrowDown">↓</button>
-    <button data-key="ArrowLeft">←</button>
-    <button data-key="ArrowRight">→</button>
-    <div class="separator"></div>
-    <button data-seq="\x1bb">Alt←</button>
-    <button data-seq="\x1bf">Alt→</button>
-    <button data-key="Home">Home</button>
-    <button data-key="End">End</button>
+    <div class="bar-header">
+      <div class="drag-handle">⋮⋮ Keys</div>
+      <button class="btn-minimize" id="btn-minimize">−</button>
+    </div>
+    <div class="keys-scroll">
+      <button data-key="Tab">Tab</button>
+      <button data-key="Escape">Esc</button>
+      <div class="separator"></div>
+      <button class="modifier" data-modifier="ctrl">Ctrl</button>
+      <button data-key="c" data-with-ctrl>C</button>
+      <button data-key="d" data-with-ctrl>D</button>
+      <button data-key="z" data-with-ctrl>Z</button>
+      <div class="separator"></div>
+      <button data-key="ArrowUp">↑</button>
+      <button data-key="ArrowDown">↓</button>
+      <button data-key="ArrowLeft">←</button>
+      <button data-key="ArrowRight">→</button>
+      <div class="separator"></div>
+      <button data-seq="\x1bb">Alt←</button>
+      <button data-seq="\x1bf">Alt→</button>
+      <button data-key="Home">Home</button>
+      <button data-key="End">End</button>
+    </div>
   </div>
   <div id="fullscreen-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:999; cursor:pointer; align-items:center; justify-content:center; flex-direction:column; gap:12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#c9d1d9;">
     <span style="font-size:40px;">&#9654;</span>
@@ -330,7 +364,7 @@
     if (isMobile) {
       mobileKeys.classList.add('visible');
 
-      // Restore saved position
+      // Restore saved position and minimized state
       const savedPos = localStorage.getItem('lt-keys-pos');
       if (savedPos) {
         const { x, y } = JSON.parse(savedPos);
@@ -340,12 +374,27 @@
         mobileKeys.style.top = y + 'px';
       }
 
+      const savedMinimized = localStorage.getItem('lt-keys-minimized') === 'true';
+      const btnMinimize = document.getElementById('btn-minimize');
+      if (savedMinimized) {
+        mobileKeys.classList.add('minimized');
+        btnMinimize.textContent = '+';
+      }
+
+      // Minimize toggle
+      btnMinimize.addEventListener('click', () => {
+        const isMinimized = mobileKeys.classList.toggle('minimized');
+        btnMinimize.textContent = isMinimized ? '+' : '−';
+        localStorage.setItem('lt-keys-minimized', isMinimized);
+      });
+
       // Drag functionality
-      const dragHandle = mobileKeys.querySelector('.drag-handle');
+      const barHeader = mobileKeys.querySelector('.bar-header');
       let isDragging = false;
       let startX, startY, startLeft, startTop;
 
-      dragHandle.addEventListener('touchstart', (e) => {
+      barHeader.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.btn-minimize')) return;
         isDragging = true;
         const touch = e.touches[0];
         const rect = mobileKeys.getBoundingClientRect();
