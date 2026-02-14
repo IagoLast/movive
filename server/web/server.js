@@ -267,7 +267,7 @@ set -euo pipefail
 DIR="$HOME/.liveterminal"
 if ! pgrep -f "frpc.*frpc.toml" &>/dev/null; then
     echo "[LiveTerminal] Starting tunnel..."
-    nohup frpc -c "\${DIR}/frpc.toml" > "\${DIR}/frpc.log" 2>&1 &
+    nohup /usr/local/bin/frpc -c "\${DIR}/frpc.toml" > "\${DIR}/frpc.log" 2>&1 &
     sleep 2
     if pgrep -f "frpc.*frpc.toml" &>/dev/null; then
         echo "[✓] Tunnel active. Access your terminal from the web."
@@ -321,7 +321,7 @@ fi
 
 # ── 10. Auto-start tunnel ────────────────────────────────────────────────────
 printf "  \${BOLD}Starting tunnel...\${NC}\\n"
-nohup frpc -c "\${CONFIG_DIR}/frpc.toml" > "\${CONFIG_DIR}/frpc.log" 2>&1 &
+nohup /usr/local/bin/frpc -c "\${CONFIG_DIR}/frpc.toml" > "\${CONFIG_DIR}/frpc.log" 2>&1 &
 sleep 2
 if pgrep -f "frpc.*frpc.toml" &>/dev/null; then
     printf "  \${GREEN}[✓] Tunnel active!\${NC}\\n\\n"
