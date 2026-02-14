@@ -28,7 +28,7 @@ load_or_prompt_config() {
         source "$CONFIG_FILE"
         info "Existing config found: VPS=${VPS_IP}"
         printf "  Use this config? [Y/n] "
-        read -r answer
+        read -r answer < /dev/tty
         if [[ "$answer" =~ ^[Nn] ]]; then
             prompt_config
         fi
@@ -42,24 +42,24 @@ prompt_config() {
     printf "\n${BOLD}LiveTerminal Setup${NC}\n\n"
 
     printf "  VPS IP (from server install): "
-    read -r VPS_IP
+    read -r VPS_IP < /dev/tty
     [[ -z "$VPS_IP" ]] && fail "VPS IP is required."
 
     printf "  Join Token (from server install): "
-    read -r JOIN_TOKEN
+    read -r JOIN_TOKEN < /dev/tty
     [[ -z "$JOIN_TOKEN" ]] && fail "Join token is required."
 
     printf "  Web port [3000]: "
-    read -r WEB_PORT
+    read -r WEB_PORT < /dev/tty
     WEB_PORT="${WEB_PORT:-3000}"
 
     # frp auth token (from server install)
     printf "  frp Auth Token (from server install): "
-    read -r FRP_TOKEN
+    read -r FRP_TOKEN < /dev/tty
     [[ -z "$FRP_TOKEN" ]] && fail "frp auth token is required."
 
     printf "  frp Server Port [7000]: "
-    read -r FRP_PORT
+    read -r FRP_PORT < /dev/tty
     FRP_PORT="${FRP_PORT:-7000}"
 
     cat > "$CONFIG_FILE" <<EOF
