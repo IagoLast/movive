@@ -1,0 +1,15 @@
+{
+  "name": "liveterminal-server",
+  "version": "0.1.0",
+  "description": "LiveTerminal — Web terminal hub for remote Claude Code sessions",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "ssh2": "^1.16.0"
+  }
+}

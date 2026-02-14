@@ -1,136 +1,129 @@
 # LiveTerminal
 
-Control **Claude Code** on your Mac from an iPhone — remotely, securely, with zero lag.
+Control **Claude Code** on your Mac from any browser or iPhone — remotely, securely, with zero lag.
 
 ```
-  Mac (Claude Code)  ←──frp tunnel──→  VPS  ←──mosh──→  iPhone (Blink Shell)
+  Dev Mac 1 ──frpc──┐                          ┌── Browser / iPhone
+  Dev Mac 2 ──frpc──┤── VPS (frps + web app) ──┤── Browser / iPhone
+  Dev Mac 3 ──frpc──┤   xterm.js dashboard     └── Browser / iPhone
+                    └───────────────────────────
 ```
+
+## How It Works
+
+1. **You** deploy the server on a VPS (DigitalOcean, Hetzner, etc.)
+2. **Each developer** runs `curl | bash` on their Mac to install the client
+3. The Mac opens an **frp reverse tunnel** to the VPS
+4. The VPS runs a **web app** with xterm.js — each developer gets their own terminal URL
+5. Open the URL from any browser (desktop, iPhone, iPad) — you get a full terminal on the Mac
+6. **Zellij** keeps the session alive if you disconnect
 
 ## Architecture
 
 | Layer | Tool | Purpose |
 |-------|------|---------|
-| Transport | **mosh** | UDP-based, handles network switches and high latency |
-| Persistence | **zellij** | Terminal multiplexer — sessions survive disconnects |
-| Tunnel | **frp** | Reverse proxy through your VPS — you own the infra |
-| Client | **Blink Shell** | iOS terminal with mosh support |
+| Transport | **SSH + frp** | Encrypted reverse tunnel through VPS |
+| Persistence | **zellij** | Session survives disconnects |
+| Tunnel | **frp** (frps/frpc) | You own the infrastructure |
+| Web terminal | **xterm.js + ssh2** | Full terminal in the browser |
+| Mobile | **Blink Shell** (optional) | Native mosh client for iOS |
 
 ## Setup
 
 ### 1. Server (VPS) — one time
 
-On your Linux VPS (Ubuntu/Debian/CentOS):
-
 ```bash
-curl -sSL https://raw.githubusercontent.com/<YOUR_USER>/movive/main/server/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/IagoLast/movive/main/server/install.sh | sudo bash
 ```
 
-This installs `frps`, configures the firewall, and starts the service. At the end it prints:
+This installs `frps` + a Node.js web app and prints:
 - **VPS IP**
-- **Auth token** (save this — the Mac client needs it)
+- **frp Auth Token**
+- **Join Token**
 
-### 2. Client (Mac) — one time
+Save all three.
 
-On your Mac:
+### 2. Client (Mac) — each developer
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/<YOUR_USER>/movive/main/client/install.sh | bash
+curl -sSL http://<VPS_IP>:3000/install.sh | bash
 ```
 
-The script will ask for:
-1. Your VPS IP
-2. The auth token from step 1
-
-It installs `mosh`, `zellij`, `frpc`, enables SSH, and prints:
-- SSH/Mosh connection commands
-- A **QR code** you can scan from your iPhone
+The script asks for the VPS IP, Join Token, and frp Auth Token, then:
+1. Installs Homebrew, mosh, zellij, frpc, qrencode
+2. Enables SSH (Remote Login) on macOS
+3. Fetches the server's SSH public key and adds it to `authorized_keys`
+4. Registers with the server API
+5. Writes the frpc tunnel config
+6. Prints a **terminal URL** + **QR code**
 
 ### 3. Daily use
 
-On the Mac, start the tunnel and session:
-
+**On the Mac** — start the tunnel:
 ```bash
 liveterminal
 ```
 
-Then connect from your iPhone. Inside the session:
-
-```bash
-claude
+**From any browser** — open your terminal URL:
+```
+http://<VPS_IP>:3000/terminal.html?id=lt-xxxxxxxx
 ```
 
-To stop the tunnel:
+Log in with your Client ID + Access Token. You get a full terminal. Run `claude` inside it.
 
+**Stop:**
 ```bash
 liveterminal-stop
 ```
-
-## Blink Shell (iPhone) Configuration
-
-1. **Install** [Blink Shell](https://apps.apple.com/app/blink-shell-mosh-ssh/id1594898306) from the App Store.
-
-2. **Add a new host:**
-   - **Host:** any nickname (e.g. `mac`)
-   - **Hostname:** your VPS IP
-   - **Port:** the SSH tunnel port shown after install (e.g. `13742`)
-   - **User:** your Mac username
-   - **Key:** add your SSH key or use password
-
-3. **Connect with Mosh** (recommended for mobile):
-   - Open Blink and type:
-     ```
-     mosh --ssh='ssh -p <SSH_PORT>' --port=<MOSH_PORT> <user>@<VPS_IP>
-     ```
-   - Or create a Blink shortcut for this command.
-
-4. **Alternative — SSH only:**
-   ```
-   ssh -p <SSH_PORT> <user>@<VPS_IP>
-   ```
-
-### Recommended Blink Settings
-
-- **Font:** Menlo or SF Mono, size 12-14
-- **Keyboard:** enable "Caps Lock as Ctrl" for easier terminal use
-- **Appearance:** dark theme for outdoor streaming
 
 ## File Structure
 
 ```
 .
 ├── client/
-│   └── install.sh        # Mac installer
+│   └── install.sh              # Mac installer (curl | bash)
 ├── server/
-│   ├── install.sh         # VPS installer
-│   └── frps.toml          # Reference server config
+│   ├── install.sh              # VPS installer (curl | sudo bash)
+│   ├── frps.toml               # Reference frp server config
+│   └── web/
+│       ├── package.json
+│       ├── server.js           # Express + WebSocket + SSH2
+│       └── public/
+│           ├── index.html      # Login page
+│           ├── terminal.html   # xterm.js terminal
+│           └── css/
+│               └── style.css
 └── README.md
 ```
 
-## How It Works
+## Security
 
-1. **Mac** runs `frpc` which opens a reverse tunnel to your VPS on a unique port
-2. **VPS** runs `frps` and forwards traffic from that port back to the Mac's SSH
-3. **iPhone** connects via mosh/SSH to the VPS port → traffic reaches the Mac
-4. **Zellij** keeps the terminal session alive even if the iPhone disconnects
-5. Inside that persistent session, **Claude Code** keeps running
+- All terminal traffic is encrypted (SSH end-to-end through the tunnel)
+- Each developer gets a unique client ID, access token, and port
+- The server uses an ed25519 SSH key to connect to client Macs
+- Join token prevents unauthorized registrations
+- Session tokens expire after 24h
+- The VPS never sees plaintext terminal content
 
-## Security Notes
+## Blink Shell (iPhone, optional)
 
-- All traffic is encrypted (SSH/mosh)
-- Auth token secures the frp tunnel — treat it like a password
-- Each client gets a unique port derived from its client ID — no collisions
-- The VPS never sees plaintext terminal content (end-to-end SSH)
-- Remote Login on Mac is scoped to the installing user
+For native mosh performance on iOS:
+
+1. Install [Blink Shell](https://apps.apple.com/app/blink-shell-mosh-ssh/id1594898306)
+2. Add a host: **Hostname** = VPS IP, **Port** = your SSH tunnel port, **User** = your Mac username
+3. Connect: `ssh -p <SSH_PORT> <user>@<VPS_IP>`
+
+Or use the web terminal — it works on any browser including Safari on iPhone.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| `frpc` won't connect | Check VPS IP/token in `~/.liveterminal/config` |
+| `frpc` won't connect | Check VPS IP and frp auth token in `~/.liveterminal/config` |
+| Web terminal shows "SSH error" | Ensure `liveterminal` is running on the Mac |
 | Port conflict | Delete `~/.liveterminal/client_id` and re-run install |
-| SSH refused | Verify Remote Login is on: System Settings > General > Sharing |
-| Mosh timeout | Ensure UDP port is open on VPS firewall |
-| Blink can't connect | Confirm you're using the tunnel port, not port 22 |
+| SSH refused on Mac | Enable Remote Login: System Settings > General > Sharing |
+| Registration fails | Verify the Join Token matches the server |
 
 ## License
 

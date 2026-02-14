@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>LiveTerminal</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1 class="logo">LiveTerminal</h1>
+      <p class="subtitle">Remote Claude Code sessions</p>
+    </header>
+
+    <div class="card" id="login-card">
+      <h2>Connect to your terminal</h2>
+      <form id="login-form">
+        <div class="field">
+          <label for="client-id">Client ID</label>
+          <input type="text" id="client-id" placeholder="lt-a1b2c3d4" required autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="access-token">Access Token</label>
+          <input type="password" id="access-token" placeholder="Your access token" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn">Connect</button>
+        <p class="error" id="error-msg"></p>
+      </form>
+    </div>
+
+    <div class="help">
+      <p>Don't have a Client ID? Install LiveTerminal on your Mac:</p>
+      <code>curl -sSL https://&lt;server&gt;/install.sh | bash</code>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const errorMsg = document.getElementById('error-msg');
+
+    // Restore saved client ID
+    const savedId = localStorage.getItem('lt-client-id');
+    if (savedId) document.getElementById('client-id').value = savedId;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.textContent = '';
+
+      const clientId = document.getElementById('client-id').value.trim();
+      const accessToken = document.getElementById('access-token').value.trim();
+
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, accessToken }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          errorMsg.textContent = data.error || 'Authentication failed';
+          return;
+        }
+
+        // Save session and redirect to terminal
+        localStorage.setItem('lt-client-id', clientId);
+        sessionStorage.setItem('lt-session', data.sessionToken);
+        window.location.href = `/terminal.html?id=${encodeURIComponent(clientId)}`;
+      } catch (err) {
+        errorMsg.textContent = 'Connection error. Try again.';
+      }
+    });
+  </script>
+</body>
+</html>
