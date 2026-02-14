@@ -17,6 +17,16 @@ fail()  { printf "${RED}[✗]${NC} %s\n" "$*"; exit 1; }
 # ── Root check ───────────────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || fail "Run as root: sudo bash install.sh"
 
+# ── Stop existing services (idempotency) ─────────────────────────────────────
+if systemctl is-active --quiet frps 2>/dev/null; then
+    info "Stopping frps service..."
+    systemctl stop frps
+fi
+if systemctl is-active --quiet liveterminal 2>/dev/null; then
+    info "Stopping liveterminal service..."
+    systemctl stop liveterminal
+fi
+
 # ── Detect package manager ───────────────────────────────────────────────────
 if command -v apt-get &>/dev/null; then
     PKG="apt-get"
