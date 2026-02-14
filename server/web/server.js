@@ -320,10 +320,18 @@ if command -v qrencode &>/dev/null; then
     printf "\\n"
 fi
 
-printf "  \${BOLD}Next:\${NC}\\n"
-printf "  1. Run \${CYAN}liveterminal\${NC} to start the tunnel\\n"
-printf "  2. Open the URL above (or scan the QR)\\n"
-printf "  3. Log in and run \${CYAN}claude\${NC}\\n\\n"
+# ── 10. Auto-start tunnel ────────────────────────────────────────────────────
+printf "  \${BOLD}Starting tunnel...\${NC}\\n"
+nohup frpc -c "\${CONFIG_DIR}/frpc.toml" > "\${CONFIG_DIR}/frpc.log" 2>&1 &
+sleep 2
+if pgrep -f "frpc.*frpc.toml" &>/dev/null; then
+    printf "  \${GREEN}[✓] Tunnel active!\${NC}\\n\\n"
+    printf "  \${BOLD}You're all set.\${NC} Open the URL or scan the QR.\\n"
+    printf "  To stop: \${CYAN}liveterminal-stop\${NC}\\n"
+    printf "  To reconnect later: \${CYAN}liveterminal\${NC} (open a new terminal first)\\n\\n"
+else
+    printf "  \${RED}[!] Tunnel failed to start.\${NC} Check \${CONFIG_DIR}/frpc.log\\n\\n"
+fi
 `;
 }
 
