@@ -196,13 +196,46 @@ else
 fi
 
 # ── 4. Enable SSH ────────────────────────────────────────────────────────────
-info "Enabling macOS Remote Login..."
-SSH_STATUS=$(sudo systemsetup -getremotelogin 2>/dev/null | awk '{print \$NF}')
-if [[ "\$SSH_STATUS" == "On" ]]; then
-    ok "Remote Login already enabled."
+info "Checking SSH (Remote Login)..."
+
+# Function to check if SSH is listening
+check_ssh() {
+    nc -z 127.0.0.1 22 2>/dev/null
+}
+
+if check_ssh; then
+    ok "SSH already enabled and listening."
 else
-    sudo systemsetup -setremotelogin on 2>/dev/null \\
-        || warn "Enable manually: System Settings > General > Sharing > Remote Login"
+    info "SSH not active. Trying to enable..."
+    sudo systemsetup -setremotelogin on 2>/dev/null || true
+    sleep 2
+
+    if check_ssh; then
+        ok "SSH enabled successfully."
+    else
+        # SSH still not working - guide user manually
+        printf "\\n"
+        printf "  \${YELLOW}╔══════════════════════════════════════════════════════════════╗\${NC}\\n"
+        printf "  \${YELLOW}║  SSH (Remote Login) is required but not enabled.             ║\${NC}\\n"
+        printf "  \${YELLOW}║                                                              ║\${NC}\\n"
+        printf "  \${YELLOW}║  Please enable it manually:                                  ║\${NC}\\n"
+        printf "  \${YELLOW}║  1. Open System Settings                                     ║\${NC}\\n"
+        printf "  \${YELLOW}║  2. Go to General → Sharing                                  ║\${NC}\\n"
+        printf "  \${YELLOW}║  3. Enable 'Remote Login'                                    ║\${NC}\\n"
+        printf "  \${YELLOW}╚══════════════════════════════════════════════════════════════╝\${NC}\\n"
+        printf "\\n"
+
+        # Open System Settings directly to sharing pane
+        open "x-apple.systempreferences:com.apple.Sharing-Settings.extension" 2>/dev/null || true
+
+        printf "  Waiting for SSH to be enabled"
+        while ! check_ssh; do
+            printf "."
+            sleep 2
+        done
+        printf "\\n"
+        ok "SSH enabled! Continuing installation..."
+    fi
 fi
 
 # ── 5. Authorize server SSH key ──────────────────────────────────────────────
@@ -294,6 +327,59 @@ if ! grep -q 'liveterminal' "\$SHELL_RC" 2>/dev/null; then
     printf '\\n# LiveTerminal\\nalias liveterminal="%s/start.sh"\\nalias liveterminal-stop="%s/stop.sh"\\n' "\$CONFIG_DIR" "\$CONFIG_DIR" >> "\$SHELL_RC"
 fi
 
+# ── 10. Start tunnel and verify ──────────────────────────────────────────────
+info "Starting tunnel..."
+pkill -f "frpc.*frpc.toml" 2>/dev/null && sleep 1 || true
+nohup /usr/local/bin/frpc -c "\${CONFIG_DIR}/frpc.toml" > "\${CONFIG_DIR}/frpc.log" 2>&1 &
+
+# Wait for tunnel to connect (check log for success)
+TUNNEL_OK=false
+for i in {1..15}; do
+    sleep 1
+    if grep -q "start proxy success" "\${CONFIG_DIR}/frpc.log" 2>/dev/null; then
+        TUNNEL_OK=true
+        break
+    fi
+    if grep -q "login to the server failed" "\${CONFIG_DIR}/frpc.log" 2>/dev/null; then
+        break
+    fi
+    printf "."
+done
+printf "\\n"
+
+if [[ "\$TUNNEL_OK" != "true" ]]; then
+    printf "\\n"
+    printf "  \${RED}╔══════════════════════════════════════════════════════════════╗\${NC}\\n"
+    printf "  \${RED}║  Tunnel failed to connect to server.                         ║\${NC}\\n"
+    printf "  \${RED}║                                                              ║\${NC}\\n"
+    printf "  \${RED}║  Check that frps is running on the VPS:                      ║\${NC}\\n"
+    printf "  \${RED}║    sudo systemctl status frps                                ║\${NC}\\n"
+    printf "  \${RED}║                                                              ║\${NC}\\n"
+    printf "  \${RED}║  Log: ~/.liveterminal/frpc.log                               ║\${NC}\\n"
+    printf "  \${RED}╚══════════════════════════════════════════════════════════════╝\${NC}\\n"
+    printf "\\n"
+    fail "Tunnel connection failed. Fix the issue and run: liveterminal"
+fi
+
+ok "Tunnel connected!"
+
+# ── 11. Verify end-to-end connection ─────────────────────────────────────────
+info "Verifying connection to server..."
+
+# Test that server can reach us through the tunnel
+VERIFY=$(curl -sS -X POST "\${SERVER_URL}/api/verify-tunnel" \\
+    -H "Content-Type: application/json" \\
+    -d "{\\"clientId\\": \\"\${CLIENT_ID}\\", \\"accessToken\\": \\"\${ACCESS_TOKEN}\\"}" 2>/dev/null) || true
+
+if echo "\$VERIFY" | python3 -c "import sys,json; assert json.load(sys.stdin).get('ok')" 2>/dev/null; then
+    ok "Connection verified!"
+else
+    VERIFY_ERROR=$(echo "\$VERIFY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error','Unknown error'))" 2>/dev/null || echo "Could not reach server")
+    warn "Verification failed: \${VERIFY_ERROR}"
+    warn "The tunnel is up but SSH connection may have issues."
+    printf "\\n"
+fi
+
 # ── Done ─────────────────────────────────────────────────────────────────────
 clear
 TERMINAL_URL="\${SERVER_URL}/?clientId=\${CLIENT_ID}&token=\${ACCESS_TOKEN}"
@@ -306,33 +392,24 @@ cat <<'BANNER'
 
 BANNER
 
-printf "\${GREEN}  Installation complete!\${NC}\\n\\n"
-printf "  \${BOLD}Your terminal:\${NC} \${CYAN}\${TERMINAL_URL}\${NC}\\n\\n"
-printf "  \${BOLD}Credentials (save these):\${NC}\\n"
-printf "  Client ID:     \${CYAN}\${CLIENT_ID}\${NC}\\n"
-printf "  Access Token:  \${YELLOW}\${ACCESS_TOKEN}\${NC}\\n\\n"
+printf "\${GREEN}  Ready to use!\${NC}\\n\\n"
+printf "  \${BOLD}Your terminal:\${NC}\\n"
+printf "  \${CYAN}\${TERMINAL_URL}\${NC}\\n\\n"
 
 # QR code
 if command -v qrencode &>/dev/null; then
-    printf "  \${BOLD}Scan to open:\${NC}\\n\\n"
+    printf "  \${BOLD}Scan with your phone:\${NC}\\n\\n"
     echo "\$TERMINAL_URL" | qrencode -t ANSIUTF8 -m 2
     printf "\\n"
 fi
 
-# ── 10. Auto-start tunnel ────────────────────────────────────────────────────
-printf "  \${BOLD}Starting tunnel...\${NC}\\n"
-# Kill any existing frpc process first (idempotency)
-pkill -f "frpc.*frpc.toml" 2>/dev/null && sleep 1 || true
-nohup /usr/local/bin/frpc -c "\${CONFIG_DIR}/frpc.toml" > "\${CONFIG_DIR}/frpc.log" 2>&1 &
-sleep 2
-if pgrep -f "frpc.*frpc.toml" &>/dev/null; then
-    printf "  \${GREEN}[✓] Tunnel active!\${NC}\\n\\n"
-    printf "  \${BOLD}You're all set.\${NC} Open the URL or scan the QR.\\n"
-    printf "  To stop: \${CYAN}liveterminal-stop\${NC}\\n"
-    printf "  To reconnect later: \${CYAN}liveterminal\${NC} (open a new terminal first)\\n\\n"
-else
-    printf "  \${RED}[!] Tunnel failed to start.\${NC} Check \${CONFIG_DIR}/frpc.log\\n\\n"
-fi
+printf "  \${BOLD}Credentials (save these):\${NC}\\n"
+printf "  Client ID:     \${CYAN}\${CLIENT_ID}\${NC}\\n"
+printf "  Access Token:  \${YELLOW}\${ACCESS_TOKEN}\${NC}\\n\\n"
+
+printf "  \${GREEN}[✓] All systems go!\${NC}\\n\\n"
+printf "  To stop:  \${CYAN}liveterminal-stop\${NC}\\n"
+printf "  To start: \${CYAN}liveterminal\${NC}\\n\\n"
 `;
 }
 
@@ -402,6 +479,56 @@ app.post("/api/auth", (req, res) => {
     sessionToken,
     user: client.user,
     sshPort: client.sshPort,
+  });
+});
+
+// Verify tunnel connectivity by attempting SSH connection
+app.post("/api/verify-tunnel", (req, res) => {
+  const { clientId, accessToken } = req.body;
+  const clients = loadClients();
+  const client = clients[clientId];
+
+  if (!client || client.accessToken !== hashToken(accessToken)) {
+    return res.status(403).json({ error: "Invalid credentials" });
+  }
+
+  // Try to connect via SSH through the tunnel
+  const ssh = new SSHClient();
+  let responded = false;
+
+  const timeout = setTimeout(() => {
+    if (!responded) {
+      responded = true;
+      ssh.end();
+      res.status(504).json({ error: "SSH connection timeout" });
+    }
+  }, 10000);
+
+  ssh.on("ready", () => {
+    clearTimeout(timeout);
+    if (!responded) {
+      responded = true;
+      ssh.end();
+      console.log(`[verify] Client ${clientId} tunnel verified OK`);
+      res.json({ ok: true });
+    }
+  });
+
+  ssh.on("error", (err) => {
+    clearTimeout(timeout);
+    if (!responded) {
+      responded = true;
+      console.log(`[verify] Client ${clientId} tunnel error: ${err.message}`);
+      res.status(502).json({ error: `SSH error: ${err.message}` });
+    }
+  });
+
+  ssh.connect({
+    host: "127.0.0.1",
+    port: client.sshPort,
+    username: client.user,
+    privateKey: SERVER_SSH_KEY,
+    readyTimeout: 8000,
   });
 });
 
