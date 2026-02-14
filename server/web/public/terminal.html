@@ -179,10 +179,7 @@
       <button data-key="ArrowLeft">←</button>
       <button data-key="ArrowRight">→</button>
       <div class="separator"></div>
-      <button data-seq="\x1bb">Alt←</button>
-      <button data-seq="\x1bf">Alt→</button>
-      <button data-key="Home">Home</button>
-      <button data-key="End">End</button>
+      <button data-char="/">/</button>
     </div>
   </div>
   <div id="fullscreen-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:999; cursor:pointer; align-items:center; justify-content:center; flex-direction:column; gap:12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#c9d1d9;">
@@ -465,9 +462,13 @@
 
       let seq = '';
 
-      // Direct sequence (like Alt+arrow)
+      // Direct sequence
       if (btn.dataset.seq) {
         seq = btn.dataset.seq;
+      }
+      // Direct character
+      else if (btn.dataset.char) {
+        seq = btn.dataset.char;
       }
       // Special key
       else if (btn.dataset.key && keyMap[btn.dataset.key]) {
