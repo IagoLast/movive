@@ -38,6 +38,51 @@
       height: calc(100% - 36px);
       width: 100%;
     }
+    /* Mobile keyboard bar */
+    #mobile-keys {
+      display: none;
+      height: 44px;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      padding: 4px 8px;
+      gap: 6px;
+      align-items: center;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #mobile-keys.visible {
+      display: flex;
+    }
+    #mobile-keys button {
+      flex-shrink: 0;
+      height: 36px;
+      min-width: 44px;
+      padding: 0 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-family: 'SF Mono', monospace;
+      font-size: 13px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #mobile-keys button:active {
+      background: #30363d;
+    }
+    #mobile-keys button.modifier {
+      background: #21262d;
+    }
+    #mobile-keys button.modifier.active {
+      background: #238636;
+      border-color: #2ea043;
+    }
+    #mobile-keys .separator {
+      width: 1px;
+      height: 24px;
+      background: #30363d;
+      flex-shrink: 0;
+    }
     #loading {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
@@ -58,6 +103,27 @@
   </div>
   <div id="terminal-container">
     <div id="loading">Connecting to your Mac...</div>
+  </div>
+
+  <!-- Mobile special keys bar -->
+  <div id="mobile-keys">
+    <button data-key="Tab">Tab</button>
+    <button data-key="Escape">Esc</button>
+    <div class="separator"></div>
+    <button class="modifier" data-modifier="ctrl">Ctrl</button>
+    <button data-key="c" data-with-ctrl>C</button>
+    <button data-key="d" data-with-ctrl>D</button>
+    <button data-key="z" data-with-ctrl>Z</button>
+    <div class="separator"></div>
+    <button data-key="ArrowUp">↑</button>
+    <button data-key="ArrowDown">↓</button>
+    <button data-key="ArrowLeft">←</button>
+    <button data-key="ArrowRight">→</button>
+    <div class="separator"></div>
+    <button data-seq="\x1bb">Alt←</button>
+    <button data-seq="\x1bf">Alt→</button>
+    <button data-key="Home">Home</button>
+    <button data-key="End">End</button>
   </div>
   <div id="fullscreen-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:999; cursor:pointer; align-items:center; justify-content:center; flex-direction:column; gap:12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#c9d1d9;">
     <span style="font-size:40px;">&#9654;</span>
@@ -229,6 +295,81 @@
         setTimeout(() => fitAddon.fit(), 100);
       }, { once: true });
     }
+
+    // Mobile keyboard support
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+                     (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+    const mobileKeys = document.getElementById('mobile-keys');
+    const termContainer = document.getElementById('terminal-container');
+
+    if (isMobile) {
+      mobileKeys.classList.add('visible');
+      // Adjust terminal height to account for mobile keys bar
+      const topBarHeight = wantFullscreen ? 0 : 36;
+      termContainer.style.height = `calc(100% - ${topBarHeight}px - 44px)`;
+    }
+
+    // Key mappings
+    const keyMap = {
+      'Tab': '\t',
+      'Escape': '\x1b',
+      'ArrowUp': '\x1b[A',
+      'ArrowDown': '\x1b[B',
+      'ArrowRight': '\x1b[C',
+      'ArrowLeft': '\x1b[D',
+      'Home': '\x1b[H',
+      'End': '\x1b[F',
+    };
+
+    let ctrlActive = false;
+    const ctrlBtn = mobileKeys.querySelector('[data-modifier="ctrl"]');
+
+    mobileKeys.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+
+      // Handle Ctrl modifier toggle
+      if (btn.dataset.modifier === 'ctrl') {
+        ctrlActive = !ctrlActive;
+        btn.classList.toggle('active', ctrlActive);
+        return;
+      }
+
+      let seq = '';
+
+      // Direct sequence (like Alt+arrow)
+      if (btn.dataset.seq) {
+        seq = btn.dataset.seq;
+      }
+      // Special key
+      else if (btn.dataset.key && keyMap[btn.dataset.key]) {
+        seq = keyMap[btn.dataset.key];
+      }
+      // Letter with optional Ctrl
+      else if (btn.dataset.key) {
+        const key = btn.dataset.key.toLowerCase();
+        if (ctrlActive || btn.dataset.withCtrl !== undefined) {
+          // Ctrl+letter = letter code - 96 (a=1, b=2, etc.)
+          seq = String.fromCharCode(key.charCodeAt(0) - 96);
+        } else {
+          seq = key;
+        }
+      }
+
+      if (seq && ws && ws.readyState === WebSocket.OPEN) {
+        const encoded = btoa(unescape(encodeURIComponent(seq)));
+        ws.send(JSON.stringify({ type: 'data', data: encoded }));
+      }
+
+      // Auto-disable Ctrl after use (unless it's a modifier-only press)
+      if (ctrlActive && btn.dataset.modifier !== 'ctrl') {
+        ctrlActive = false;
+        ctrlBtn.classList.remove('active');
+      }
+
+      // Keep terminal focused
+      term.focus();
+    });
 
     // Go
     connect();
