@@ -297,7 +297,7 @@ fi
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 clear
-TERMINAL_URL="\${SERVER_URL}/terminal.html?id=\${CLIENT_ID}"
+TERMINAL_URL="\${SERVER_URL}/?clientId=\${CLIENT_ID}&token=\${ACCESS_TOKEN}"
 
 cat <<'BANNER'
 

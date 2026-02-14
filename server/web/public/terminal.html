@@ -59,6 +59,10 @@
   <div id="terminal-container">
     <div id="loading">Connecting to your Mac...</div>
   </div>
+  <div id="fullscreen-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:999; cursor:pointer; align-items:center; justify-content:center; flex-direction:column; gap:12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#c9d1d9;">
+    <span style="font-size:40px;">&#9654;</span>
+    <span style="font-size:16px;">Tap to open fullscreen</span>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
@@ -69,9 +73,17 @@
     const params = new URLSearchParams(window.location.search);
     const clientId = params.get('id');
     const sessionToken = sessionStorage.getItem('lt-session');
+    const wantFullscreen = params.get('fullscreen') === '1';
 
     if (!clientId || !sessionToken) {
       window.location.href = '/';
+    }
+
+    // Fullscreen mode: hide top bar and use full viewport
+    if (wantFullscreen) {
+      const topBar = document.getElementById('top-bar');
+      topBar.style.display = 'none';
+      document.getElementById('terminal-container').style.height = '100%';
     }
 
     const statusDot = document.getElementById('status-dot');
@@ -204,9 +216,23 @@
       window.location.href = '/';
     }
 
+    // Fullscreen API support
+    if (wantFullscreen) {
+      const overlay = document.getElementById('fullscreen-overlay');
+      overlay.style.display = 'flex';
+      overlay.addEventListener('click', () => {
+        overlay.style.display = 'none';
+        const el = document.documentElement;
+        const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (rfs) rfs.call(el).catch(() => {});
+        term.focus();
+        setTimeout(() => fitAddon.fit(), 100);
+      }, { once: true });
+    }
+
     // Go
     connect();
-    term.focus();
+    if (!wantFullscreen) term.focus();
   </script>
 </body>
 </html>
