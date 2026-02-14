@@ -120,28 +120,43 @@ fi
 
 # ── 5. Deploy web app ───────────────────────────────────────────────────────
 info "Deploying web app..."
-mkdir -p "$APP_DIR"
-
-# Clone or copy web app files
-# For curl|bash installs, we download from the repo
-REPO_URL="https://raw.githubusercontent.com/IagoLast/movive/main"
-
-# Create directory structure
 mkdir -p "${APP_DIR}/public/css"
 
-# Download web app files
-for file in package.json server.js; do
-    curl -sSL --retry 3 -o "${APP_DIR}/${file}" "${REPO_URL}/server/web/${file}" \
-        || fail "Failed to download ${file}"
-done
+# Detect if running from cloned repo (local files exist)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+LOCAL_WEB="${SCRIPT_DIR}/web"
 
-for file in index.html terminal.html; do
-    curl -sSL --retry 3 -o "${APP_DIR}/public/${file}" "${REPO_URL}/server/web/public/${file}" \
-        || fail "Failed to download ${file}"
-done
+if [[ -d "$LOCAL_WEB" && -f "${LOCAL_WEB}/server.js" ]]; then
+    info "Copying web app from local repo..."
+    cp "${LOCAL_WEB}/package.json"              "${APP_DIR}/"
+    cp "${LOCAL_WEB}/server.js"                 "${APP_DIR}/"
+    cp "${LOCAL_WEB}/public/index.html"         "${APP_DIR}/public/"
+    cp "${LOCAL_WEB}/public/terminal.html"      "${APP_DIR}/public/"
+    cp "${LOCAL_WEB}/public/css/style.css"      "${APP_DIR}/public/css/"
+    ok "Copied from local repo"
+else
+    info "Downloading web app from GitHub..."
+    REPO_URL="https://raw.githubusercontent.com/IagoLast/movive/main"
 
-curl -sSL --retry 3 -o "${APP_DIR}/public/css/style.css" "${REPO_URL}/server/web/public/css/style.css" \
-    || fail "Failed to download style.css"
+    for file in package.json server.js; do
+        curl -sSL --retry 3 -o "${APP_DIR}/${file}" "${REPO_URL}/server/web/${file}" \
+            || fail "Failed to download ${file}"
+    done
+    for file in index.html terminal.html; do
+        curl -sSL --retry 3 -o "${APP_DIR}/public/${file}" "${REPO_URL}/server/web/public/${file}" \
+            || fail "Failed to download ${file}"
+    done
+    curl -sSL --retry 3 -o "${APP_DIR}/public/css/style.css" "${REPO_URL}/server/web/public/css/style.css" \
+        || fail "Failed to download style.css"
+    ok "Downloaded from GitHub"
+fi
+
+# Also copy the client install script so the server can serve it
+CLIENT_INSTALL="${SCRIPT_DIR}/../client/install.sh"
+if [[ -f "$CLIENT_INSTALL" ]]; then
+    cp "$CLIENT_INSTALL" "${APP_DIR}/install-client.sh"
+    ok "Client install script bundled"
+fi
 
 # Install npm dependencies
 cd "$APP_DIR"
