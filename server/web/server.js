@@ -321,6 +321,8 @@ fi
 
 # ── 10. Auto-start tunnel ────────────────────────────────────────────────────
 printf "  \${BOLD}Starting tunnel...\${NC}\\n"
+# Kill any existing frpc process first (idempotency)
+pkill -f "frpc.*frpc.toml" 2>/dev/null && sleep 1 || true
 nohup /usr/local/bin/frpc -c "\${CONFIG_DIR}/frpc.toml" > "\${CONFIG_DIR}/frpc.log" 2>&1 &
 sleep 2
 if pgrep -f "frpc.*frpc.toml" &>/dev/null; then
