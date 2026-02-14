@@ -1,0 +1,26 @@
+# =============================================================================
+# LiveTerminal - frps.toml (reference / manual install)
+# Place at /etc/frp/frps.toml on your VPS.
+# The server/install.sh script generates this automatically.
+# =============================================================================
+
+bindPort = 7000
+
+auth.method = "token"
+auth.token  = "CHANGE_ME_TO_A_SECURE_TOKEN"
+
+# Port ranges reserved for client tunnels
+allowPorts = [
+  { start = 10000, end = 20000 },   # SSH tunnels
+  { start = 30000, end = 40000 }    # Mosh UDP
+]
+
+# Optional web dashboard
+webServer.addr     = "0.0.0.0"
+webServer.port     = 7500
+webServer.user     = "admin"
+webServer.password = "CHANGE_ME"
+
+log.to      = "/var/log/frps.log"
+log.level   = "info"
+log.maxDays = 7
