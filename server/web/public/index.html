@@ -43,6 +43,42 @@
     const savedId = localStorage.getItem('lt-client-id');
     if (savedId) document.getElementById('client-id').value = savedId;
 
+    async function doLogin(clientId, accessToken, fullscreen) {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, accessToken }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Authentication failed');
+      }
+
+      localStorage.setItem('lt-client-id', clientId);
+      sessionStorage.setItem('lt-session', data.sessionToken);
+      const termUrl = `/terminal.html?id=${encodeURIComponent(clientId)}${fullscreen ? '&fullscreen=1' : ''}`;
+      window.location.href = termUrl;
+    }
+
+    // Auto-login from QR query params
+    const urlParams = new URLSearchParams(window.location.search);
+    const qrClientId = urlParams.get('clientId');
+    const qrToken = urlParams.get('token');
+
+    if (qrClientId && qrToken) {
+      document.getElementById('login-card').querySelector('h2').textContent = 'Connecting...';
+      document.querySelector('.btn').disabled = true;
+      doLogin(qrClientId, qrToken, true).catch((err) => {
+        document.getElementById('login-card').querySelector('h2').textContent = 'Connect to your terminal';
+        document.querySelector('.btn').disabled = false;
+        document.getElementById('client-id').value = qrClientId;
+        errorMsg.textContent = err.message;
+        // Clean URL without reloading
+        history.replaceState(null, '', '/');
+      });
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorMsg.textContent = '';
@@ -51,24 +87,9 @@
       const accessToken = document.getElementById('access-token').value.trim();
 
       try {
-        const res = await fetch('/api/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId, accessToken }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          errorMsg.textContent = data.error || 'Authentication failed';
-          return;
-        }
-
-        // Save session and redirect to terminal
-        localStorage.setItem('lt-client-id', clientId);
-        sessionStorage.setItem('lt-session', data.sessionToken);
-        window.location.href = `/terminal.html?id=${encodeURIComponent(clientId)}`;
+        await doLogin(clientId, accessToken, false);
       } catch (err) {
-        errorMsg.textContent = 'Connection error. Try again.';
+        errorMsg.textContent = err.message || 'Connection error. Try again.';
       }
     });
   </script>
